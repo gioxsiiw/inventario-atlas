@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inventario ATLAS</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1b1f24;--muted:#66707c;--card:#fff;--line:#dfe3e8;--accent:#0f5b4c;--danger:#b42318;--ok:#067647}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg);font-size:15px}
+header{padding:14px 18px;background:var(--accent);color:#fff;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+header button{background:none;border:1px solid #ffffff88;color:#fff;border-radius:7px;padding:5px 10px;cursor:pointer;font:inherit}
+nav{display:flex;gap:4px;overflow-x:auto;padding:8px;border-bottom:1px solid var(--line);background:var(--card)}
+nav button{flex:none;border:0;background:none;padding:8px 12px;border-radius:8px;color:var(--muted);font:inherit;cursor:pointer}
+nav button.on{background:var(--bg);color:var(--fg);font-weight:600}
+main{padding:18px;max-width:1180px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:13px}
+input,select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);max-width:100%}
+input.num{width:80px}
+.btn{font:inherit;padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.bad{color:var(--danger);font-weight:600}
+.ok{color:var(--ok)}
+.muted{color:var(--muted);font-size:13px}
+.wrap{overflow-x:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media (max-width:700px){.grid2{grid-template-columns:1fr}}
+.tag{font-size:12px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+details summary{cursor:pointer}
+@media print{body *{visibility:hidden}#print-area,#print-area *{visibility:visible}#print-area{position:absolute;left:0;top:0;width:100%}.noprint{display:none!important}.card{border:0;padding:0}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+window.onerror=(m)=>{document.getElementById("app").innerHTML='<main><div class="card bad">Error: '+String(m).replace(/</g,"&lt;")+'</div></main>';};
+window.addEventListener("unhandledrejection",e=>{document.getElementById("app").innerHTML='<main><div class="card bad">Error: '+String(e.reason&&e.reason.message||e.reason).replace(/</g,"&lt;")+'</div></main>';});
+const SB_URL="https://iaedmrhrwochbwlxgonx.supabase.co";
+const SB_KEY="sb_publishable_u8D4RMK4bYwafLOaiUOGgQ_0ZaCiXmW";
+if(!window.supabase){
+  document.getElementById("app").innerHTML='<main><div class="card bad">No se pudo cargar la librería de Supabase. Revisa tu conexión a internet y recarga la página.</div></main>';
+  throw new Error("Librería de Supabase no cargada");
+}
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+const TIPOS=["cuerpo","tornillo","tuerca","laminilla","espiral","otro"];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num=v=>{const n=parseInt(v,10);return isNaN(n)?0:n};
+const clean=s=>String(s??"").trim().toUpperCase().replace(/[^A-Z0-9_.-]/g,"-");
+const opts=arr=>arr.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+const fmt=f=>new Date(f).toLocaleString("es-MX");
+
+/* Catálogo inicial de la guía de ensambles (sin existencias) */
+const CAT={
+  comp:[["CUE-CLIP-FORTIA-RES","Clip Fortia Residencial","cuerpo"],["CUE-CLIP-FORTIA-IND","Clip Fortia Industrial","cuerpo"],["CUE-MID-CLAMP-RES","Mid Clamp Residencial","cuerpo"],["CUE-MID-CLAMP-IND","Mid Clamp Industrial","cuerpo"],["CUE-ANCLA-2X4-B","L-Foot","cuerpo"],["CUE-CONEXION-90","Conexión 90°","cuerpo"],["CUE-PLACA-CNX","Placa CNX","cuerpo"],["CUE-END-CLAMP","End Clamp","cuerpo"],["CUE-COPLE-FORTIA","Cople Fortia","cuerpo"],["CUE-COPLE-FORTIA-SLIM","Cople Fortia Slim","cuerpo"],["CUE-KR-DORICO","KR Dórico","cuerpo"],["CUE-GANCHO-TIERRA","Gancho Tierra","cuerpo"],["TOR-TBOLT-M8","T-Bolt M8","tornillo"],["TOR-HEX-M8X12","Tornillo Hex M8x12","tornillo"],["TOR-HEX-M8X16","Tornillo Hex M8x16","tornillo"],["TOR-HEX-M8X25","Tornillo Hex M8x25","tornillo"],["TOR-HEX-M8X30","Tornillo Hex M8x30","tornillo"],["TOR-HEX-M8X35","Tornillo Hex M8x35","tornillo"],["TOR-HEX-M8X40","Tornillo Hex M8x40","tornillo"],["TOR-HEX-M8X45","Tornillo Hex M8x45","tornillo"],["TUE-M8","Tuerca M8","tuerca"],["TUE-M10","Tuerca M10","tuerca"],["LAM-LAMINILLA","Laminilla","laminilla"],["ESP-ESPIRAL-GRANDE","Espiral grande","espiral"]],
+  ens:[["ENS-CLIP-FORTIA-RES","Clip Fortia","Residencial T-Bolt",40.5],["ENS-CLIP-FORTIA-IND","Clip Fortia","Industrial Hexagonal",42.7],["ENS-MID-CLAMP-RES","Mid Clamp","Residencial T-Bolt",52.8],["ENS-MID-CLAMP-IND","Mid Clamp","Industrial Hexagonal",55],["ENS-ANCLA-2X4-B-HEX","L-Foot","Industrial Hexagonal",89.1],["ENS-ANCLA-2X4-B-TBOLT","L-Foot","Residencial T-Bolt",86.9],["ENS-CONEXION-90","Conexión 90°","",70],["ENS-PLACA-CNX","Placa CNX","",118],["ENS-END-CLAMP","End Clamp","30 mm",45.7],["ENS-COPLE-FORTIA","Cople Fortia","",106.3],["ENS-COPLE-FORTIA-SLIM","Cople Fortia Slim","",88],["ENS-KR","KR Dórico","",187],["ENS-GANCHO-TIERRA","Gancho Tierra","",42.3]],
+  rec:[["ENS-CLIP-FORTIA-RES","CUE-CLIP-FORTIA-RES",1],["ENS-CLIP-FORTIA-RES","TOR-TBOLT-M8",1],["ENS-CLIP-FORTIA-RES","TUE-M8",1],["ENS-CLIP-FORTIA-IND","CUE-CLIP-FORTIA-IND",1],["ENS-CLIP-FORTIA-IND","TOR-HEX-M8X25",1],["ENS-CLIP-FORTIA-IND","TUE-M8",1],["ENS-MID-CLAMP-RES","CUE-MID-CLAMP-RES",1],["ENS-MID-CLAMP-RES","TOR-TBOLT-M8",1],["ENS-MID-CLAMP-RES","TUE-M8",1],["ENS-MID-CLAMP-RES","LAM-LAMINILLA",1],["ENS-MID-CLAMP-IND","CUE-MID-CLAMP-IND",1],["ENS-MID-CLAMP-IND","TOR-HEX-M8X25",1],["ENS-MID-CLAMP-IND","TUE-M8",1],["ENS-MID-CLAMP-IND","LAM-LAMINILLA",1],["ENS-ANCLA-2X4-B-HEX","CUE-ANCLA-2X4-B",1],["ENS-ANCLA-2X4-B-HEX","TOR-HEX-M8X25",1],["ENS-ANCLA-2X4-B-HEX","TUE-M8",1],["ENS-ANCLA-2X4-B-TBOLT","CUE-ANCLA-2X4-B",1],["ENS-ANCLA-2X4-B-TBOLT","TOR-TBOLT-M8",1],["ENS-ANCLA-2X4-B-TBOLT","TUE-M8",1],["ENS-CONEXION-90","CUE-CONEXION-90",1],["ENS-CONEXION-90","TOR-HEX-M8X25",1],["ENS-CONEXION-90","TOR-TBOLT-M8",1],["ENS-CONEXION-90","TUE-M8",2],["ENS-PLACA-CNX","CUE-PLACA-CNX",1],["ENS-PLACA-CNX","TOR-HEX-M8X25",2],["ENS-PLACA-CNX","TOR-TBOLT-M8",1],["ENS-PLACA-CNX","TUE-M8",3],["ENS-END-CLAMP","CUE-END-CLAMP",1],["ENS-END-CLAMP","TOR-HEX-M8X30",1],["ENS-END-CLAMP","TUE-M8",1],["ENS-COPLE-FORTIA","CUE-COPLE-FORTIA",1],["ENS-COPLE-FORTIA","TOR-TBOLT-M8",2],["ENS-COPLE-FORTIA","TUE-M8",2],["ENS-COPLE-FORTIA-SLIM","CUE-COPLE-FORTIA-SLIM",1],["ENS-COPLE-FORTIA-SLIM","TOR-HEX-M8X12",2],["ENS-KR","CUE-KR-DORICO",1],["ENS-KR","TOR-HEX-M8X35",2],["ENS-GANCHO-TIERRA","CUE-GANCHO-TIERRA",1],["ENS-GANCHO-TIERRA","TOR-HEX-M8X25",1],["ENS-GANCHO-TIERRA","TUE-M8",1],["ENS-GANCHO-TIERRA","TOR-HEX-M8X16",1],["ENS-GANCHO-TIERRA","ESP-ESPIRAL-GRANDE",1]]
+};
+
+let S={comp:{},ens:{},rec:[],mov:[],ventas:[]};
+let user=null, tab="inv", msg="", pe="", pn=1, pst=false, carrito=[], cliTmp="", folioTmp="", vistaImp=false;
+
+/* Lectura y escritura */
+async function loadAll(){
+  const [c,e,r,m,v]=await Promise.all([
+    sb.from("componentes").select("*"),
+    sb.from("ensambles").select("*"),
+    sb.from("recetas").select("*"),
+    sb.from("movimientos").select("*").order("id",{ascending:false}).limit(300),
+    sb.from("ventas").select("*").order("fecha",{ascending:false})
+  ]);
+  for(const x of [c,e,r,m,v]) if(x.error) throw x.error;
+  S.comp=Object.fromEntries(c.data.map(x=>[x.codigo,x]));
+  S.ens=Object.fromEntries(e.data.map(x=>[x.codigo,x]));
+  S.rec=r.data; S.mov=m.data; S.ventas=v.data;
+}
+async function ins(t,row){const {error}=await sb.from(t).insert(row);if(error)throw error}
+async function upd(t,match,vals){const {error}=await sb.from(t).update(vals).match(match);if(error)throw error}
+async function del(t,match){const {error}=await sb.from(t).delete().match(match);if(error)throw error}
+const logMov=(tipo,codigo,cantidad,nota)=>ins("movimientos",{tipo,codigo,cantidad,nota:nota||""});
+
+async function run(fn,okMsg){
+  try{
+    await fn();
+    await loadAll();
+    msg=okMsg?`<div class="card ok">${esc(okMsg)}</div>`:"";
+  }catch(e){
+    msg=`<div class="card bad">${esc(e.message||e)}</div>`;
+  }
+  render();
+}
+
+function go(t){tab=t;msg="";render()}
+function say(t,err){msg=`<div class="card ${err?'bad':'ok'}">${esc(t)}</div>`;render()}
+
+/* Auth */
+async function entrar(){
+  const {error}=await sb.auth.signInWithPassword({email:$("l-mail").value.trim(),password:$("l-pass").value});
+  if(error){$("l-err").textContent="Correo o contraseña incorrectos"}
+}
+
+/* Inventario */
+function movComp(cod,signo){return run(async()=>{
+  const n=num($("q-"+cod).value); if(n<=0) throw new Error("Cantidad inválida");
+  const c=S.comp[cod];
+  if(signo<0&&n>c.existencia) throw new Error(`No hay suficiente ${c.nombre}: hay ${c.existencia}`);
+  await upd("componentes",{codigo:cod},{existencia:c.existencia+signo*n});
+  await logMov(signo>0?"entrada":"salida",cod,n,"");
+})}
+function ajustar(cod){return run(async()=>{
+  const nuevo=num($("a-"+cod).value); if(nuevo<0) throw new Error("No puede ser negativo");
+  const dif=nuevo-S.comp[cod].existencia;
+  await upd("componentes",{codigo:cod},{existencia:nuevo});
+  if(dif) await logMov("ajuste",cod,dif,"ajuste de conteo");
+},"Conteo ajustado")}
+function addComp(){return run(async()=>{
+  const cod=clean($("c-cod").value); if(!cod) throw new Error("Falta el código");
+  if(S.comp[cod]) throw new Error("Ya existe ese código");
+  const ex=num($("c-exi").value);
+  await ins("componentes",{codigo:cod,nombre:$("c-nom").value.trim()||cod,tipo:$("c-tipo").value,existencia:ex,stock_minimo:$("c-min").value.trim()?num($("c-min").value):null,ubicacion:"",notas:""});
+  if(ex) await logMov("entrada",cod,ex,"alta inicial");
+},"Componente agregado")}
+function cargarCatalogo(){return run(async()=>{
+  await ins("componentes",CAT.comp.map(([codigo,nombre,tipo])=>({codigo,nombre,tipo,existencia:0})));
+  await ins("ensambles",CAT.ens.map(([codigo,nombre,variante,peso_g])=>({codigo,nombre,variante,peso_g,existencia:0})));
+  await ins("recetas",CAT.rec.map(([ensamble,componente,cantidad])=>({ensamble,componente,cantidad})));
+},"Catálogo cargado")}
+
+/* Ensambles y recetas */
+function addEns(){return run(async()=>{
+  const cod=clean($("e-cod").value); if(!cod) throw new Error("Falta el código");
+  if(S.ens[cod]) throw new Error("Ya existe ese ensamble");
+  await ins("ensambles",{codigo:cod,nombre:$("e-nom").value.trim()||cod,variante:$("e-var").value.trim(),peso_g:num($("e-peso").value),existencia:0});
+},"Ensamble agregado")}
+function addRec(ens){return run(async()=>{
+  const comp=$("r-"+ens).value, n=num($("rq-"+ens).value);
+  if(!comp||n<=0) throw new Error("Elige componente y cantidad");
+  const {error}=await sb.from("recetas").upsert({ensamble:ens,componente:comp,cantidad:n});
+  if(error) throw error;
+},"Receta actualizada")}
+function delRec(ens,comp){return run(()=>del("recetas",{ensamble:ens,componente:comp}),"Línea quitada")}
+
+/* Producción */
+function needs(ens,n,soloCuerpo){
+  return S.rec.filter(r=>r.ensamble===ens).filter(r=>!soloCuerpo||S.comp[r.componente]?.tipo==="cuerpo").map(r=>{
+    const have=S.comp[r.componente]?.existencia??0, req=r.cantidad*n;
+    return {comp:r.componente,req,have,falta:Math.max(0,req-have)};
+  });
+}
+function faltanteMsg(ens,cant){
+  const nombre=S.ens[ens].nombre+" "+S.ens[ens].variante;
+  const lista=needs(ens,cant,false).filter(x=>x.falta>0);
+  if(!lista.length) return `Faltan ${cant} de ${nombre}: se pueden producir con el material disponible.`;
+  return `Faltan ${cant} de ${nombre}. Para producirlos necesitas: `+lista.map(x=>`${x.comp} (faltan ${x.falta})`).join(", ")+". Compra tornillería o haz más ensambles.";
+}
+function producir(){return run(async()=>{
+  const ens0=$("sel-ens").value, n=num($("prod-n").value);
+  if(!ens0||n<=0) throw new Error("Elige ensamble y cantidad");
+  const lista=needs(ens0,n,pst);
+  if(!lista.length) throw new Error("Ese ensamble no tiene receta");
+  if(lista.some(x=>x.falta>0)) throw new Error("Faltan piezas: no se descontó nada");
+  const base=S.ens[ens0];
+  const dest=pst?"ST|"+base.nombre:ens0;
+  for(const x of lista){
+    await upd("componentes",{codigo:x.comp},{existencia:S.comp[x.comp].existencia-x.req});
+    await logMov("salida",x.comp,x.req,"para "+dest);
+  }
+  if(!S.ens[dest]) await ins("ensambles",{codigo:dest,nombre:pst?base.nombre+" (sin tornillería)":base.nombre,variante:pst?"":base.variante,peso_g:pst?null:base.peso_g,existencia:0});
+  await upd("ensambles",{codigo:dest},{existencia:(S.ens[dest]?.existencia??0)+n});
+  await logMov("produccion",dest,n,"");
+},"Producción registrada y enviada a ensambles terminados")}
+
+/* Ventas */
+function addCarrito(){
+  const ens=$("v-ens").value, n=num($("v-n").value);
+  if(!ens||n<=0) return say("Elige ensamble y cantidad",1);
+  const ya=carrito.filter(x=>x.ensamble===ens).reduce((a,x)=>a+x.cantidad,0);
+  if(ya+n>S.ens[ens].existencia) return say(faltanteMsg(ens,ya+n-S.ens[ens].existencia),1);
+  const l=carrito.find(x=>x.ensamble===ens); if(l) l.cantidad+=n; else carrito.push({ensamble:ens,cantidad:n});
+  msg=""; render();
+}
+function quitarCarrito(i){carrito.splice(i,1);msg="";render()}
+function registrarVenta(){return run(async()=>{
+  if(!carrito.length) throw new Error("Agrega ensambles a la venta");
+  const bad=carrito.find(x=>x.cantidad>S.ens[x.ensamble].existencia);
+  if(bad) throw new Error(faltanteMsg(bad.ensamble,bad.cantidad-S.ens[bad.ensamble].existencia));
+  const id=folioTmp.trim(); if(!id) throw new Error("Escribe el folio del comprobante");
+  if(S.ventas.some(v=>v.id===id)) throw new Error("Ese folio ya existe");
+  const cli=cliTmp.trim();
+  const lineas=carrito.map(x=>({ensamble:x.ensamble,nombre:S.ens[x.ensamble].nombre,variante:S.ens[x.ensamble].variante,cantidad:x.cantidad}));
+  await ins("ventas",{id,cliente:cli,lineas});
+  for(const l of lineas){
+    await upd("ensambles",{codigo:l.ensamble},{existencia:S.ens[l.ensamble].existencia-l.cantidad});
+    await logMov("venta",l.ensamble,l.cantidad,id+(cli?" · "+cli:""));
+  }
+  carrito=[]; cliTmp=""; folioTmp="";
+},"Venta registrada y descontada del inventario")}
+
+/* Vistas */
+function invView(){
+  const lista=(grupo)=>Object.values(S.comp).filter(c=>grupo==="cuerpo"?c.tipo==="cuerpo":c.tipo!=="cuerpo").sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  const tabla=(items)=>`<div class="card wrap"><table><tr><th>Componente</th><th>Existencia</th><th>Movimientos</th></tr>${items.map(c=>{
+    const bajo=c.stock_minimo!=null&&c.existencia<=c.stock_minimo;
+    return `<tr><td><b>${esc(c.nombre)}</b><div class="muted">${esc(c.codigo)}</div></td>
+    <td class="${bajo?'bad':''}">${c.existencia}${bajo?' <span class="tag">reponer</span>':''}</td>
+    <td><div class="row"><input class="num" id="q-${c.codigo}" value="1"><button class="btn" onclick="movComp('${c.codigo}',1)">+ Entrada</button><button class="btn" onclick="movComp('${c.codigo}',-1)">− Salida</button></div>
+    <div class="row" style="margin-top:6px"><input class="num" id="a-${c.codigo}" value="${c.existencia}"><button class="btn" onclick="ajustar('${c.codigo}')">Ajustar conteo</button></div></td></tr>`;
+  }).join("")||'<tr><td colspan="3" class="muted">Sin piezas</td></tr>'}</table></div>`;
+  const ensLista=Object.values(S.ens).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const ensSec=`<div id="print-area"><div class="card"><div class="row" style="justify-content:space-between"><div><b>Ensambles</b> <span class="muted">(listos para vender)</span></div><button class="btn noprint" onclick="vistaImp=true;render()">Vista para imprimir</button></div></div>
+    <div class="card wrap"><table><tr><th>Ensamble</th><th>Existencia</th></tr>${ensLista.map(e=>`<tr><td>${esc(e.nombre)} <span class="muted">${esc(e.variante)}</span></td><td>${e.existencia}</td></tr>`).join("")||'<tr><td colspan="2" class="muted">Sin ensambles</td></tr>'}</table></div></div>`;
+  const alertas=Object.values(S.comp).filter(c=>c.stock_minimo!=null&&c.existencia<=c.stock_minimo);
+  const alerta=alertas.length?`<div class="card bad"><b>Reponer:</b> ${alertas.map(c=>`${esc(c.nombre)} (hay ${c.existencia}, mínimo ${c.stock_minimo})`).join(" · ")}</div>`:"";
+  const carga=!Object.keys(S.comp).length?`<div class="card"><b>Catálogo vacío.</b> <button class="btn pri" onclick="cargarCatalogo()">Cargar catálogo de la guía</button></div>`:"";
+  return `${carga}${ensSec}${alerta}<div class="card"><b>Nuevo componente</b>
+    <div class="row" style="margin-top:8px"><input id="c-cod" placeholder="Código, ej. TOR-HEX-M8X35"><input id="c-nom" placeholder="Nombre"><select id="c-tipo">${opts(TIPOS)}</select><input class="num" id="c-exi" placeholder="Exist." value="0"><input class="num" id="c-min" placeholder="Mín."><button class="btn pri" onclick="addComp()">Agregar</button></div></div>
+    <div class="grid2"><div><div class="card"><b>Componentes</b></div>${tabla(lista("cuerpo"))}</div>
+    <div><div class="card"><b>Tornillería, tuercas y otras piezas</b></div>${tabla(lista("otro"))}</div></div>`;
+}
+function ensView(){
+  const comps=opts(Object.keys(S.comp).sort());
+  const bloques=Object.values(S.ens).filter(e=>!e.codigo.includes("|")).sort((a,b)=>a.codigo.localeCompare(b.codigo)).map(e=>{
+    const filas=S.rec.filter(r=>r.ensamble===e.codigo).map(r=>`<tr><td>${esc(r.componente)} <span class="muted">${esc(S.comp[r.componente]?.nombre||"")}</span></td><td>${r.cantidad}</td><td><button class="btn" onclick="delRec('${e.codigo}','${r.componente}')">Quitar</button></td></tr>`).join("");
+    return `<div class="card"><b>${esc(e.nombre)}</b> <span class="muted">${esc(e.codigo)}${e.variante?' · '+esc(e.variante):''}${e.peso_g?' · '+e.peso_g+' g':''}</span>
+    <table>${filas||'<tr><td class="muted">Sin receta</td></tr>'}</table>
+    <div class="row" style="margin-top:8px"><select id="r-${e.codigo}">${comps}</select><input class="num" id="rq-${e.codigo}" value="1"><button class="btn" onclick="addRec('${e.codigo}')">Agregar a receta</button></div></div>`;
+  }).join("");
+  return `<div class="card"><b>Nuevo ensamble</b><div class="row" style="margin-top:8px"><input id="e-cod" placeholder="Código, ej. ENS-KR"><input id="e-nom" placeholder="Nombre"><input id="e-var" placeholder="Variante"><input class="num" id="e-peso" placeholder="g"><button class="btn pri" onclick="addEns()">Agregar</button></div></div>${bloques}`;
+}
+function prodView(){
+  const list=Object.values(S.ens).filter(e=>!e.codigo.includes("|")).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  const ens=pe&&S.ens[pe]?pe:(list[0]?.codigo||"");
+  const sel=`<select id="sel-ens" onchange="pe=this.value;pn=num($('prod-n').value);render()">${list.map(e=>`<option value="${esc(e.codigo)}" ${e.codigo===ens?'selected':''}>${esc(e.nombre)} ${esc(e.variante)}</option>`).join("")}</select>`;
+  const lista=ens?needs(ens,pn,pst):[];
+  const falta=lista.some(x=>x.falta>0);
+  const filas=lista.map(x=>`<tr><td>${esc(x.comp)}</td><td>${x.req}</td><td>${x.have}</td><td class="${x.falta?'bad':'ok'}">${x.falta||'✓'}</td></tr>`).join("");
+  return `<div class="card"><div class="row">${sel}<label>Cantidad <input class="num" id="prod-n" value="${pn}" onchange="pn=num(this.value);render()"></label><label><input type="checkbox" ${pst?'checked':''} onchange="pst=this.checked;render()"> Sin tornillería</label></div>
+  <div class="wrap" style="margin-top:10px"><table><tr><th>Componente</th><th>Requiere</th><th>Hay</th><th>Falta</th></tr>${filas||'<tr><td colspan="4" class="muted">Sin receta</td></tr>'}</table></div>
+  <div class="row" style="margin-top:12px"><button class="btn pri" ${falta||!lista.length||pn<=0?'disabled':''} onclick="producir()">Producir ${pn} × ${esc(ens)}</button></div></div>`;
+}
+function ventaView(){
+  const list=Object.values(S.ens).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  const car=carrito.map((x,i)=>`<tr><td>${esc(S.ens[x.ensamble].nombre)} <span class="muted">${esc(S.ens[x.ensamble].variante)}</span></td><td>${x.cantidad}</td><td><button class="btn" onclick="quitarCarrito(${i})">Quitar</button></td></tr>`).join("");
+  const comp=S.ventas.map(v=>`<details class="card"><summary><b>${esc(v.id)}</b> · ${fmt(v.fecha)} · ${esc(v.cliente||'Sin cliente')} · ${v.lineas.reduce((a,l)=>a+l.cantidad,0)} ensamble(s)</summary>
+    <table style="margin-top:8px"><tr><th>Ensamble</th><th>Cantidad</th></tr>${v.lineas.map(l=>`<tr><td>${esc(l.nombre)} <span class="muted">${esc(l.variante)}</span></td><td>${l.cantidad}</td></tr>`).join("")}</table></details>`).join("")||'<div class="card muted">Aún no hay ventas</div>';
+  return `<div class="card"><b>Nueva venta</b>
+    <div class="row" style="margin-top:8px"><select id="v-ens">${list.map(e=>`<option value="${esc(e.codigo)}">${esc(e.nombre)} ${esc(e.variante)} (hay ${e.existencia})</option>`).join("")}</select>
+    <input class="num" id="v-n" value="1"><button class="btn" onclick="addCarrito()">Agregar a la venta</button></div>
+    <div class="wrap" style="margin-top:10px"><table>${car?`<tr><th>Ensamble</th><th>Cant.</th><th></th></tr>${car}`:'<tr><td class="muted">Sin ensambles en la venta</td></tr>'}</table></div>
+    <div class="row" style="margin-top:10px"><input id="v-folio" placeholder="Folio, ej. P-0001" value="${esc(folioTmp)}" oninput="folioTmp=this.value">
+    <input id="v-cli" placeholder="Cliente (opcional)" value="${esc(cliTmp)}" oninput="cliTmp=this.value">
+    <button class="btn pri" onclick="registrarVenta()" ${carrito.length?'':'disabled'}>Registrar venta</button></div></div>
+    <div class="card"><b>Comprobantes</b></div>${comp}`;
+}
+function movView(){
+  const rows=S.mov.map(m=>`<tr><td class="muted">${fmt(m.fecha)}</td><td>${esc(m.tipo)}</td><td>${esc(m.codigo)}</td><td>${m.cantidad}</td><td class="muted">${esc(m.nota)}</td></tr>`).join("");
+  return `<div class="card wrap"><table><tr><th>Fecha</th><th>Tipo</th><th>Código</th><th>Cant.</th><th>Nota</th></tr>${rows||'<tr><td colspan="5" class="muted">Sin movimientos</td></tr>'}</table></div>`;
+}
+
+function render(){
+  if(!user){
+    $("app").innerHTML=`<main style="max-width:360px;margin-top:60px"><div class="card"><b>Inicia sesión</b>
+      <div class="row" style="flex-direction:column;align-items:stretch;margin-top:10px"><input id="l-mail" type="email" placeholder="Correo"><input id="l-pass" type="password" placeholder="Contraseña"><button class="btn pri" onclick="entrar()">Entrar</button><span id="l-err" class="bad"></span></div></div></main>`;
+    return;
+  }
+  if(vistaImp){
+    const filas=Object.values(S.ens).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(e=>`<tr><td>${esc(e.nombre)} <span class="muted">${esc(e.variante)}</span></td><td>${e.existencia}</td></tr>`).join("");
+    $("app").innerHTML=`<main><div class="row noprint" style="margin-bottom:12px"><button class="btn pri" onclick="window.print()">Imprimir</button><button class="btn" onclick="vistaImp=false;render()">Volver</button></div>
+      <div id="print-area"><div class="card"><b>Ensambles</b> <span class="muted">Inventario al ${new Date().toLocaleDateString("es-MX")}</span></div>
+      <div class="card wrap"><table><tr><th>Ensamble</th><th>Existencia</th></tr>${filas||'<tr><td colspan="2" class="muted">Sin ensambles</td></tr>'}</table></div></div></main>`;
+    return;
+  }
+  const tabs=[["inv","Inventario"],["ens","Ensambles"],["prod","Producir"],["ven","Ventas"],["mov","Movimientos"]];
+  const views={inv:invView,ens:ensView,prod:prodView,ven:ventaView,mov:movView};
+  $("app").innerHTML=`<header><span>Inventario y ensambles</span><span>
+    <button onclick="run(()=>{},'Datos actualizados')">Actualizar</button> <button onclick="sb.auth.signOut()">Salir</button></span></header>
+    <nav>${tabs.map(([k,l])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${l}</button>`).join("")}</nav>
+    <main>${msg}${views[tab]()}</main>`;
+}
+
+sb.auth.onAuthStateChange(async(_ev,session)=>{
+  user=session?.user||null;
+  if(user){
+    try{await loadAll();}catch(e){msg=`<div class="card bad">No pude leer la base: ${esc(e.message)}</div>`;}
+  }
+  render();
+});
+</script>
+</body>
+</html>
